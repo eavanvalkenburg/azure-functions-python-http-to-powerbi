@@ -1,0 +1,105 @@
+{
+    "$schema": "http://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "siteName": {
+            "type": "string",
+            "metadata": {
+                "description": "The name of the function app that you wish to create."
+            }
+        },
+        "siteLocation": {
+            "type": "string",
+            "defaultValue": "West US",
+            "metadata": {
+                "description": "The location to use for creating the function app and hosting plan. It must be one of the Azure locations that support function apps."
+            }
+        },
+        "powerbiPushConnectionString": {
+            "type": "string",
+            "metadata": {
+                "description": "Your connection string to a PowerBI Push dataset"
+            }
+        }
+    },
+    "variables": {
+        "storageName": "[concat('function', uniqueString(parameters('siteName')))]",
+        "repoUrl": "https://github.com/eavanvalkenburg/azure-functions-python-http-to-powerbi",
+        "branch": "master"
+    },
+    "resources": [
+        {
+            "location": "[parameters('siteLocation')]",
+            "kind": "functionapp,linux",
+            "apiVersion": "2016-03-01",
+            "name": "[parameters('siteName')]",
+            "type": "Microsoft.Web/sites",
+            "properties": {
+                "name": "[parameters('siteName')]",
+                "siteConfig": {
+                    "appSettings": [
+                        {
+                            "name": "FUNCTIONS_WORKER_RUNTIME",
+                            "value": "python"
+                        },
+                        {
+                            "name": "AzureWebJobsStorage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "FUNCTIONS_EXTENSION_VERSION",
+                            "value": "~2"
+                        },
+                        {
+                            "name": "Storage",
+                            "value": "[concat('DefaultEndpointsProtocol=https;AccountName=',variables('storageName'),';AccountKey=',listKeys(resourceId('Microsoft.Storage/storageAccounts', variables('storageName')), '2015-05-01-preview').key1)]"
+                        },
+                        {
+                            "name": "WEBSITE_NODE_DEFAULT_VERSION",
+                            "value": "8.11.1"
+                        },
+                        {
+                            "name": "powerbi_push_connstring",
+                            "value": "[parameters('powerbiPushConnectionString')]"
+                        }
+                    ]
+                },
+                "clientAffinityEnabled": false,
+                "reserved": true
+            },
+            "resources": [
+                {
+                    "apiVersion": "2015-08-01",
+                    "name": "web",
+                    "type": "sourcecontrols",
+                    "dependsOn": [
+                        "[resourceId('Microsoft.Web/Sites', parameters('siteName'))]"
+                    ],
+                    "properties": {
+                        "RepoUrl": "[variables('repoURL')]",
+                        "branch": "[variables('branch')]",
+                        "IsManualIntegration": true
+                    }
+                }
+            ],
+            "dependsOn": [
+                "[resourceId('Microsoft.Storage/storageAccounts', variables('storageName'))]"
+            ]
+        },
+        {
+            "apiVersion": "2015-05-01-preview",
+            "type": "Microsoft.Storage/storageAccounts",
+            "name": "[variables('storageName')]",
+            "location": "[parameters('siteLocation')]",
+            "properties": {
+                "accountType": "Standard_LRS"
+            }
+        }
+    ],
+    "outputs": {
+        "siteUri": {
+            "type": "string",
+            "value": "[concat('https://',reference(resourceId('Microsoft.Web/sites', parameters('siteName'))).hostNames[0])]"
+        }
+    }
+}
